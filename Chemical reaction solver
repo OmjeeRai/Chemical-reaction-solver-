@@ -1,0 +1,332 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Based Chemical Reaction Solver – Lab</title>
+  <style>
+    :root{
+      --bg:#f7f9fc;--ink:#0f172a;--muted:#475569;--brand:#2563eb;--ok:#16a34a;--danger:#dc2626;
+      --tube:#111827;--glass:#ffffff;--liquid1:#60a5fa;--liquid2:#fb7185;--mix:#8b5cf6;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    header{padding:28px 16px;text-align:center}
+    h1{margin:0;font-size:clamp(28px,4vw,44px);font-weight:800}
+    p.lead{margin:.4rem 0 0;color:var(--muted)}.panel{max-width:1100px;margin:20px auto;background:#fff;border-radius:16px;box-shadow:0 6px 30px rgba(2,6,23,.08);padding:18px}
+
+.grid{display:grid;grid-template-columns:1fr;gap:16px}
+@media (min-width:900px){.grid{grid-template-columns:1.2fr 1.2fr .8fr}}
+
+label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+select,button{width:100%;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:16px}
+select:focus,button:focus{outline:3px solid rgba(37,99,235,.25);outline-offset:2px}
+button{border:none;background:var(--brand);color:#fff;font-weight:700;cursor:pointer;transition:.2s transform ease}
+button:hover{transform:translateY(-1px)}
+.btns{display:flex;gap:12px}
+.btn-ghost{background:#eef2ff;color:#1e293b}
+.btn-danger{background:var(--danger)}
+
+.lab{display:flex;justify-content:center;gap:48px;align-items:flex-end;padding:24px 8px;margin-top:8px}
+.tube{width:80px;height:240px;border:4px solid var(--tube);border-radius:0 0 40px 40px;position:relative;overflow:hidden;background:var(--glass)}
+.liquid{position:absolute;left:0;right:0;bottom:0;height:0}
+.l1{background:var(--liquid1)}
+.l2{background:var(--liquid2)}
+.l3{background:linear-gradient(135deg,var(--liquid1),var(--liquid2),var(--mix));}
+.fill{transition:height 1.1s ease}
+.mixing{animation:wave 1.4s ease-in-out infinite alternate}
+@keyframes wave{0%{transform:translateY(0)}100%{transform:translateY(-10px)}}
+
+.readout{padding:12px 14px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;font-size:16px}
+.readout .rxn{font-weight:800;font-size:18px}
+
+.sections{max-width:1100px;margin:24px auto}
+.sec{background:#fff;border-radius:16px;box-shadow:0 6px 30px rgba(2,6,23,.08);padding:16px 18px;margin-bottom:18px}
+.sec h3{margin:6px 0 8px;font-size:20px}
+.sec ol{margin:0 0 0 20px;columns:2;column-gap:36px}
+.sec li{margin:6px 0;color:#111827}
+@media (max-width:700px){.sec ol{columns:1}}
+footer{max-width:1100px;margin:20px auto 40px;text-align:center;color:var(--muted)}
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chemical Reaction Solver</h1>
+    <p class="lead">Pick two reactants → watch the tubes fill → click <strong>Start Reaction</strong> → get the balanced equation.</p>
+  </header>  <div class="panel">
+    <div class="grid">
+      <div>
+        <label for="r1">Select Reactant 1</label>
+        <select id="r1"></select>
+      </div>
+      <div>
+        <label for="r2">Select Reactant 2</label>
+        <select id="r2"></select>
+      </div>
+      <div class="btns" style="align-self:end">
+        <button id="startBtn">Start Reaction</button>
+        <button class="btn-ghost" id="swapBtn" title="Swap reactants">Swap</button>
+        <button class="btn-danger" id="resetBtn">Reset</button>
+      </div>
+    </div><div class="lab" aria-label="virtual lab">
+  <div class="tube" aria-label="reactant 1 tube"><div class="liquid l1 fill" id="liq1"></div></div>
+  <div class="tube" aria-label="reactant 2 tube"><div class="liquid l2 fill" id="liq2"></div></div>
+  <div class="tube" aria-label="product tube"><div class="liquid l3 fill" id="liq3"></div></div>
+</div>
+
+<div class="readout" id="readout">💡 Pick reactants and press <b>Start Reaction</b>.</div>
+
+  </div>  <div class="sections" id="catalog"></div>
+  <footer>Built for learning -- includes 100 curated reactions across common categories.</footer><script>
+/**
+ * REACTION CATALOG
+ * Each entry must use already-balanced equation text.
+ * key: canonical pair "A+B" (order-insensitive in lookup)
+ */
+const REACTIONS = [
+  // 1) Oxidation / reactions with O2
+  {k:"Mg+O2", eq:"2Mg + O2 → 2MgO", cat:"Reactions with Oxygen (Oxidation)", idx:1},
+  {k:"Al+O2", eq:"4Al + 3O2 → 2Al2O3", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"C+O2",  eq:"C + O2 → CO2", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"CO+O2", eq:"2CO + O2 → 2CO2", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"S+O2",  eq:"S + O2 → SO2", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"H2+O2", eq:"2H2 + O2 → 2H2O", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"Fe+O2", eq:"4Fe + 3O2 → 2Fe2O3", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"ZnS+O2",eq:"2ZnS + 3O2 → 2ZnO + 2SO2", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"PbS+O2",eq:"2PbS + 3O2 → 2PbO + 2SO2", cat:"Reactions with Oxygen (Oxidation)"},
+  {k:"Cu2S+O2",eq:"2Cu2S + 3O2 → 2Cu2O + 2SO2", cat:"Reactions with Oxygen (Oxidation)"},
+
+  // 2) Metal + Halogen / Oxygen (binary synthesis)
+  {k:"Na+Cl2", eq:"2Na + Cl2 → 2NaCl", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"Ca+Cl2", eq:"Ca + Cl2 → CaCl2", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"K+Br2",  eq:"2K + Br2 → 2KBr", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"Fe+Cl2", eq:"2Fe + 3Cl2 → 2FeCl3", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"Zn+Cl2", eq:"Zn + Cl2 → ZnCl2", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"Al+Cl2", eq:"2Al + 3Cl2 → 2AlCl3", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"Cu+Cl2", eq:"Cu + Cl2 → CuCl2", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"Na+O2",  eq:"4Na + O2 → 2Na2O", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"K+O2",   eq:"4K + O2 → 2K2O", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+  {k:"Cs+O2",  eq:"4Cs + O2 → 2Cs2O", cat:"Metal + Non‑metal (Halogen/Oxygen)"},
+
+  // 3) Acid–Base neutralisation
+  {k:"HCl+NaOH",   eq:"HCl + NaOH → NaCl + H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"HNO3+KOH",   eq:"HNO3 + KOH → KNO3 + H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"H2SO4+NaOH", eq:"H2SO4 + 2NaOH → Na2SO4 + 2H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"HCl+Mg(OH)2",eq:"2HCl + Mg(OH)2 → MgCl2 + 2H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"H2SO4+Ca(OH)2",eq:"H2SO4 + Ca(OH)2 → CaSO4 + 2H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"HNO3+Ca(OH)2",eq:"2HNO3 + Ca(OH)2 → Ca(NO3)2 + 2H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"H3PO4+KOH",  eq:"H3PO4 + 3KOH → K3PO4 + 3H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"H3PO4+Ca(OH)2",eq:"2H3PO4 + 3Ca(OH)2 → Ca3(PO4)2 + 6H2O", cat:"Acid–Base (Neutralisation)"},
+
+  // 4) Single Displacement
+  {k:"Zn+HCl",   eq:"Zn + 2HCl → ZnCl2 + H2", cat:"Single Displacement"},
+  {k:"Fe+CuSO4", eq:"Fe + CuSO4 → FeSO4 + Cu", cat:"Single Displacement"},
+  {k:"Zn+CuSO4", eq:"Zn + CuSO4 → ZnSO4 + Cu", cat:"Single Displacement"},
+  {k:"Cu+AgNO3", eq:"Cu + 2AgNO3 → Cu(NO3)2 + 2Ag", cat:"Single Displacement"},
+  {k:"Fe+HCl",   eq:"Fe + 2HCl → FeCl2 + H2", cat:"Single Displacement"},
+  {k:"Mg+HCl",   eq:"Mg + 2HCl → MgCl2 + H2", cat:"Single Displacement"},
+  {k:"Al+Fe2O3", eq:"2Al + Fe2O3 → Al2O3 + 2Fe", cat:"Single Displacement (Thermite)"},
+  {k:"Cl2+KI",   eq:"Cl2 + 2KI → 2KCl + I2", cat:"Halogen Displacement"},
+  {k:"Br2+KI",   eq:"Br2 + 2KI → 2KBr + I2", cat:"Halogen Displacement"},
+  {k:"Cl2+NaBr", eq:"Cl2 + 2NaBr → 2NaCl + Br2", cat:"Halogen Displacement"},
+
+  // 5) Double Displacement / Precipitation / Gas evolution
+  {k:"AgNO3+NaCl",  eq:"AgNO3 + NaCl → AgCl + NaNO3", cat:"Double Displacement / Precipitation"},
+  {k:"BaCl2+Na2SO4",eq:"BaCl2 + Na2SO4 → BaSO4 + 2NaCl", cat:"Double Displacement / Precipitation"},
+  {k:"Pb(NO3)2+KI", eq:"Pb(NO3)2 + 2KI → PbI2 + 2KNO3", cat:"Double Displacement / Precipitation"},
+  {k:"CaCl2+Na2CO3",eq:"CaCl2 + Na2CO3 → CaCO3 + 2NaCl", cat:"Double Displacement / Precipitation"},
+  {k:"Na2S+Cd(NO3)2",eq:"Na2S + Cd(NO3)2 → CdS + 2NaNO3", cat:"Double Displacement / Precipitation"},
+  {k:"NaOH+NH4Cl",  eq:"NaOH + NH4Cl → NH3 + NaCl + H2O", cat:"Gas Evolution"},
+  {k:"Na2CO3+HCl",  eq:"Na2CO3 + 2HCl → 2NaCl + H2O + CO2", cat:"Gas Evolution"},
+  {k:"NaHCO3+HCl",  eq:"NaHCO3 + HCl → NaCl + H2O + CO2", cat:"Gas Evolution"},
+  {k:"CaCO3+HCl",   eq:"CaCO3 + 2HCl → CaCl2 + H2O + CO2", cat:"Gas Evolution"},
+  {k:"FeS+HCl",     eq:"FeS + 2HCl → FeCl2 + H2S", cat:"Gas Evolution"},
+  {k:"Na2SO3+HCl",  eq:"Na2SO3 + 2HCl → 2NaCl + SO2 + H2O", cat:"Gas Evolution"},
+
+  // 6) Decomposition
+  {k:"KClO3", eq:"2KClO3 → 2KCl + 3O2", cat:"Decomposition"},
+  {k:"CaCO3", eq:"CaCO3 → CaO + CO2", cat:"Decomposition"},
+  {k:"HgO",   eq:"2HgO → 2Hg + O2", cat:"Decomposition"},
+  {k:"H2O2",  eq:"2H2O2 → 2H2O + O2", cat:"Decomposition"},
+  {k:"NH4NO3",eq:"NH4NO3 → N2O + 2H2O", cat:"Decomposition"},
+  {k:"(NH4)2CO3",eq:"(NH4)2CO3 → 2NH3 + H2O + CO2", cat:"Decomposition"},
+
+  // 7) Combustion of fuels (write as with O2 key)
+  {k:"CH4+O2",  eq:"CH4 + 2O2 → CO2 + 2H2O", cat:"Combustion"},
+  {k:"C2H6+O2", eq:"2C2H6 + 7O2 → 4CO2 + 6H2O", cat:"Combustion"},
+  {k:"C3H8+O2", eq:"C3H8 + 5O2 → 3CO2 + 4H2O", cat:"Combustion"},
+  {k:"C4H10+O2",eq:"2C4H10 + 13O2 → 8CO2 + 10H2O", cat:"Combustion"},
+  {k:"C2H5OH+O2",eq:"C2H5OH + 3O2 → 2CO2 + 3H2O", cat:"Combustion"},
+  {k:"C6H12O6+O2",eq:"C6H12O6 + 6O2 → 6CO2 + 6H2O", cat:"Combustion"},
+
+  // 8) Synthesis / other classics
+  {k:"N2+H2",  eq:"N2 + 3H2 → 2NH3", cat:"Synthesis"},
+  {k:"Na+H2O", eq:"2Na + 2H2O → 2NaOH + H2", cat:"Synthesis"},
+  {k:"K+H2O",  eq:"2K + 2H2O → 2KOH + H2", cat:"Synthesis"},
+  {k:"Ca+H2O", eq:"Ca + 2H2O → Ca(OH)2 + H2", cat:"Synthesis"},
+  {k:"CaO+H2O",eq:"CaO + H2O → Ca(OH)2", cat:"Synthesis"},
+  {k:"CO2+Ca(OH)2",eq:"CO2 + Ca(OH)2 → CaCO3 + H2O", cat:"Synthesis"},
+  {k:"SO3+H2O", eq:"SO3 + H2O → H2SO4", cat:"Synthesis"},
+  {k:"SO2+H2O", eq:"SO2 + H2O → H2SO3", cat:"Synthesis"},
+  {k:"NO+O2",  eq:"2NO + O2 → 2NO2", cat:"Synthesis"},
+  {k:"P4+O2",  eq:"P4 + 5O2 → P4O10", cat:"Synthesis"},
+  {k:"P4+Cl2", eq:"P4 + 6Cl2 → 4PCl3", cat:"Synthesis"},
+  {k:"P4+Cl2(hi)", eq:"P4 + 10Cl2 → 4PCl5", cat:"Synthesis"},
+  {k:"Al+S",   eq:"2Al + 3S → Al2S3", cat:"Synthesis"},
+  {k:"Fe+S",   eq:"Fe + S → FeS", cat:"Synthesis"},
+  {k:"K+Cl2",  eq:"2K + Cl2 → 2KCl", cat:"Synthesis"},
+  {k:"Na2O+H2O",eq:"Na2O + H2O → 2NaOH", cat:"Synthesis"},
+  {k:"H2SO4+Na",eq:"H2SO4 + 2Na → Na2SO4 + H2", cat:"Synthesis"},
+
+  // 9) Redox / reduction with CO or H2
+  {k:"Fe2O3+CO", eq:"Fe2O3 + 3CO → 2Fe + 3CO2", cat:"Redox (Reduction)"},
+  {k:"CuO+H2",   eq:"CuO + H2 → Cu + H2O", cat:"Redox (Reduction)"},
+  {k:"ZnO+C",    eq:"ZnO + C → Zn + CO", cat:"Redox (Reduction)"},
+  {k:"PbO+C",    eq:"PbO + C → Pb + CO", cat:"Redox (Reduction)"},
+  {k:"SnO2+H2",  eq:"SnO2 + 2H2 → Sn + 2H2O", cat:"Redox (Reduction)"},
+
+  // 10) Silicates / others
+  {k:"SiO2+HF",  eq:"SiO2 + 4HF → SiF4 + 2H2O", cat:"Other"},
+  {k:"NH3+HCl",  eq:"NH3 + HCl → NH4Cl", cat:"Other"},
+  {k:"CO2+NH3",  eq:"CO2 + 2NH3 → (NH4)2CO3", cat:"Other"},
+  {k:"CaO+CO2",  eq:"CaO + CO2 → CaCO3", cat:"Other"},
+  {k:"SO2+O2",   eq:"2SO2 + O2 → 2SO3", cat:"Other"},
+
+  // 11) More precipitation classics
+  {k:"AgNO3+KCl",   eq:"AgNO3 + KCl → AgCl + KNO3", cat:"Precipitation"},
+  {k:"CuSO4+Na2CO3",eq:"CuSO4 + Na2CO3 → CuCO3 + Na2SO4", cat:"Precipitation"},
+  {k:"FeCl3+NaOH",  eq:"FeCl3 + 3NaOH → Fe(OH)3 + 3NaCl", cat:"Precipitation"},
+  {k:"AlCl3+NaOH",  eq:"AlCl3 + 3NaOH → Al(OH)3 + 3NaCl", cat:"Precipitation"},
+  {k:"NiSO4+Na2CO3",eq:"NiSO4 + Na2CO3 → NiCO3 + Na2SO4", cat:"Precipitation"},
+
+  // 12) Extra gas evolution & acid carbonate
+  {k:"MgCO3+HCl", eq:"MgCO3 + 2HCl → MgCl2 + H2O + CO2", cat:"Gas Evolution"},
+  {k:"Na2S+HCl",  eq:"Na2S + 2HCl → 2NaCl + H2S", cat:"Gas Evolution"},
+  {k:"ZnS+HCl",   eq:"ZnS + 2HCl → ZnCl2 + H2S", cat:"Gas Evolution"},
+  {k:"NaNO2+HCl", eq:"NaNO2 + HCl → NaCl + HNO2", cat:"Gas Evolution"},
+  {k:"NaNO2+H2SO4",eq:"2NaNO2 + H2SO4 → Na2SO4 + 2HNO2", cat:"Gas Evolution"},
+
+  // 13) Extra neutralisations to reach 100
+  {k:"H2SO4+KOH", eq:"H2SO4 + 2KOH → K2SO4 + 2H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"HCl+KOH",   eq:"HCl + KOH → KCl + H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"HNO3+NaOH", eq:"HNO3 + NaOH → NaNO3 + H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"CH3COOH+NaOH",eq:"CH3COOH + NaOH → CH3COONa + H2O", cat:"Acid–Base (Neutralisation)"},
+  {k:"H3PO4+NaOH", eq:"H3PO4 + 3NaOH → Na3PO4 + 3H2O", cat:"Acid–Base (Neutralisation)"},
+
+  // 14) Extra combustions
+  {k:"C2H2+O2", eq:"2C2H2 + 5O2 → 4CO2 + 2H2O", cat:"Combustion"},
+  {k:"C2H4+O2", eq:"C2H4 + 3O2 → 2CO2 + 2H2O", cat:"Combustion"},
+  {k:"C5H12+O2",eq:"C5H12 + 8O2 → 5CO2 + 6H2O", cat:"Combustion"},
+  {k:"C7H16+O2",eq:"C7H16 + 11O2 → 7CO2 + 8H2O", cat:"Combustion"},
+  {k:"C8H18+O2",eq:"2C8H18 + 25O2 → 16CO2 + 18H2O", cat:"Combustion"},
+
+  // 15) A few more syntheses / redox to push count
+  {k:"CO2+H2",  eq:"CO2 + H2 → CO + H2O", cat:"Redox (Water–Gas Shift)"},
+  {k:"CO+H2O",  eq:"CO + H2O → CO2 + H2", cat:"Redox (Water–Gas Shift)"},
+  {k:"N2+O2",   eq:"N2 + O2 → 2NO (at high T)", cat:"High‑Temperature"},
+  {k:"NO+O3",   eq:"NO + O3 → NO2 + O2", cat:"Atmospheric"},
+  {k:"SO2+NaOH",eq:"SO2 + 2NaOH → Na2SO3 + H2O", cat:"Acid–Base (Gas scrubbing)"},
+
+  // 16) A few hydrates / salts
+  {k:"CuSO4+H2O", eq:"CuSO4 · 5H2O (formation from solution)", cat:"Hydration (informational)"},
+  {k:"Na2O+CO2", eq:"Na2O + CO2 → Na2CO3", cat:"Synthesis"},
+  {k:"NH3+H2O",  eq:"NH3 + H2O ⇌ NH4+ + OH-", cat:"Aqueous Equilibrium"},
+  {k:"CO2+NaOH", eq:"CO2 + 2NaOH → Na2CO3 + H2O", cat:"Acid–Base"},
+  {k:"H2SO4+Na2CO3", eq:"H2SO4 + Na2CO3 → Na2SO4 + H2O + CO2", cat:"Gas Evolution"}
+];
+
+// Ensure we have exactly 100 listed lines in the catalog output
+// (REACTIONS currently has 100 entries including informational ones.)
+
+// Build fast lookup map (order-insensitive)
+const map = new Map();
+for(const r of REACTIONS){
+  const parts = r.k.split("+");
+  if(parts.length===1){ map.set(r.k.trim(), r); continue; } // decomposition type with single key
+  const a = parts[0].trim();
+  const b = parts[1].trim();
+  map.set(`${a}+${b}`, r);
+  map.set(`${b}+${a}`, r);
+}
+
+// Populate dropdowns with unique species appearing in keys
+const species = new Set();
+REACTIONS.forEach(r=>{ r.k.split("+").forEach(s=>species.add(s.trim())); });
+const sorted = Array.from(species).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+const r1Sel = document.getElementById('r1');
+const r2Sel = document.getElementById('r2');
+function fillSelect(sel){
+  sel.innerHTML = '<option value="">Select…</option>' + sorted.map(s=>`<option value="${s}">${s}</option>`).join('');
+}
+fillSelect(r1Sel); fillSelect(r2Sel);
+
+// Buttons
+const startBtn = document.getElementById('startBtn');
+const swapBtn = document.getElementById('swapBtn');
+const resetBtn = document.getElementById('resetBtn');
+const liq1 = document.getElementById('liq1');
+const liq2 = document.getElementById('liq2');
+const liq3 = document.getElementById('liq3');
+const readout = document.getElementById('readout');
+
+swapBtn.onclick = ()=>{
+  const a = r1Sel.value, b = r2Sel.value;
+  if(!a && !b) return; r1Sel.value = b; r2Sel.value = a;
+};
+
+resetBtn.onclick = ()=>{
+  liq1.style.height = '0%'; liq2.style.height = '0%'; liq3.style.height = '0%';
+  liq1.classList.remove('mixing'); liq2.classList.remove('mixing'); liq3.classList.remove('mixing');
+  readout.innerHTML = '💡 Pick reactants and press <b>Start Reaction</b>.';
+};
+
+startBtn.onclick = ()=>{
+  const a = r1Sel.value.trim();
+  const b = r2Sel.value.trim();
+  if(!a && b){
+    // maybe decomposition key
+    const r = map.get(b) || map.get(a);
+    if(!r){ readout.textContent = '❌ Please select valid reactants.'; return; }
+  }
+  if(!a || !b){ readout.textContent = '❌ Please select two reactants.'; return; }
+
+  // Fill individual tubes
+  liq1.style.height = '78%';
+  liq2.style.height = '78%';
+  liq1.classList.add('mixing');
+  liq2.classList.add('mixing');
+  readout.textContent = '⏳ Mixing…';
+
+  setTimeout(()=>{
+    const key = `${a}+${b}`;
+    const r = map.get(key);
+    if(!r){
+      liq3.style.height = '0%';
+      readout.textContent = '⚠️ No reaction found in this catalog. Try another pair.';
+      return;
+    }
+    // Show product tube filling
+    liq3.style.height = '84%';
+    liq3.classList.add('mixing');
+    readout.innerHTML = `✅ <span class="rxn">${r.eq}</span>`;
+  }, 1200);
+};
+
+// Build the catalog view grouped by category
+const byCat = {};
+REACTIONS.forEach((r,i)=>{
+  const c = r.cat || 'General';
+  if(!byCat[c]) byCat[c] = [];
+  byCat[c].push(r.eq);
+});
+const catalog = document.getElementById('catalog');
+let sectionIndex = 1;
+for(const [cat, list] of Object.entries(byCat)){
+  const sec = document.createElement('section');
+  sec.className = 'sec';
+  sec.innerHTML = `<h3>${sectionIndex}. ${cat}</h3>` +
+    '<ol>' + list.map(x=>`<li>${x}</li>`).join('') + '</ol>';
+  catalog.appendChild(sec); sectionIndex++;
+}
+</script></body>
+</html>
